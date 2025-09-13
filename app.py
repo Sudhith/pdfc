@@ -7,9 +7,17 @@ import pikepdf
 from pdf2docx import Converter
 from docx2pdf import convert as docx_to_pdf
 from PIL import Image
+from flask import Flask, request, send_file, render_template
+from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app)  # allow requests from any origin for now
+app = Flask(__name__, static_folder='static', template_folder='templates')
+CORS(app)
+
+@app.route('/')
+def home():
+    return render_template('test.html')  # your frontend
+
+# ... your other routes (split PDF, pdf-to-word, etc.)
 
 # ---------------- HELPER ----------------
 def safe_send_file(path, download_name):
