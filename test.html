@@ -24,7 +24,7 @@
     <div class="tab-content">
         <div class="tab-pane fade show active" id="pdf" role="tabpanel">
             <h3 class="mt-3">Merge PDFs</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/merge" enctype="multipart/form-data">
+            <form class="ajax-form" action="/merge" enctype="multipart/form-data">
                 <input type="file" name="files" accept="application/pdf" multiple required>
                 <button class="btn btn-success">Merge PDFs</button>
             </form>
@@ -32,7 +32,7 @@
             <hr>
 
             <h3>Split PDF</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/split" enctype="multipart/form-data">
+            <form class="ajax-form" action="/split" enctype="multipart/form-data">
                 <input type="file" name="file" accept="application/pdf" required><br>
                 Start: <input type="number" name="start" required> End: <input type="number" name="end" required><br>
                 <button class="btn btn-success">Split PDF</button>
@@ -41,7 +41,7 @@
             <hr>
 
             <h3>PDF → Word</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/pdf-to-word" enctype="multipart/form-data">
+            <form class="ajax-form" action="/pdf-to-word" enctype="multipart/form-data">
                 <input type="file" name="file" accept="application/pdf" required>
                 <button class="btn btn-success">Convert</button>
             </form>
@@ -49,7 +49,7 @@
             <hr>
 
             <h3>Add Password</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/add-password" enctype="multipart/form-data">
+            <form class="ajax-form" action="/add-password" enctype="multipart/form-data">
                 <input type="file" name="file" accept="application/pdf" required>
                 Password: <input type="text" name="password" required>
                 <button class="btn btn-success">Protect PDF</button>
@@ -58,7 +58,7 @@
             <hr>
 
             <h3>Unlock PDF</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/unlock" enctype="multipart/form-data">
+            <form class="ajax-form" action="/unlock" enctype="multipart/form-data">
                 <input type="file" name="file" accept="application/pdf" required>
                 Password: <input type="text" name="password" required>
                 <button class="btn btn-success">Unlock PDF</button>
@@ -67,7 +67,7 @@
 
         <div class="tab-pane fade" id="word" role="tabpanel">
             <h3 class="mt-3">Word → PDF</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/word-to-pdf" enctype="multipart/form-data">
+            <form class="ajax-form" action="/word-to-pdf" enctype="multipart/form-data">
                 <input type="file" name="file" accept=".docx" required>
                 <button class="btn btn-success">Convert</button>
             </form>
@@ -75,7 +75,7 @@
 
         <div class="tab-pane fade" id="ppt" role="tabpanel">
             <h3 class="mt-3">PPT → PDF</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/ppt-to-pdf" enctype="multipart/form-data">
+            <form class="ajax-form" action="/ppt-to-pdf" enctype="multipart/form-data">
                 <input type="file" name="file" accept=".ppt,.pptx" required>
                 <button class="btn btn-success">Convert</button>
             </form>
@@ -83,7 +83,7 @@
 
         <div class="tab-pane fade" id="image" role="tabpanel">
             <h3 class="mt-3">Images → PDF</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/images-to-pdf" enctype="multipart/form-data">
+            <form class="ajax-form" action="/images-to-pdf" enctype="multipart/form-data">
                 <input type="file" name="files" accept="image/*" multiple required>
                 <button class="btn btn-success">Convert</button>
             </form>
@@ -91,7 +91,7 @@
             <hr>
 
             <h3>Resize & Compress Images</h3>
-            <form class="ajax-form" action="https://pdfc.up.railway.app/resize-compress-image" enctype="multipart/form-data">
+            <form class="ajax-form" action="/resize-compress-image" enctype="multipart/form-data">
                 <input type="file" name="files" accept="image/*" multiple required><br>
                 Width: <input type="number" name="width" required>
                 Height: <input type="number" name="height" required>
@@ -123,7 +123,7 @@
             try {
                 const res = await fetch(endpoint, { method: 'POST', body: formData });
                 if (!res.ok) {
-                    const err = await res.json();
+                    const err = await res.json().catch(()=>({error:res.statusText}));
                     alert("Error: " + (err.error || JSON.stringify(err)));
                     return;
                 }
@@ -145,7 +145,13 @@
                 a.click();
                 a.remove();
             } catch (err) {
-                alert("Request failed: " + err);
+                // clearer hint for network / CORS failures
+                console.error("Fetch error:", err);
+                if (err instanceof TypeError) {
+                    alert("Network error: Failed to fetch. Check server status, CORS, or correct endpoint (use relative paths).");
+                } else {
+                    alert("Request failed: " + err);
+                }
             }
         });
     });
