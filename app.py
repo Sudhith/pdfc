@@ -6,13 +6,33 @@ from werkzeug.utils import secure_filename
 import pikepdf
 from pdf2docx import Converter
 from PIL import Image
+import logging
+import traceback
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
 
+# configure logger early so exceptions are visible in container logs
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
+
 @app.route('/')
 def home():
     return render_template('test.html')  # your frontend
+
+# quick health endpoint to verify container is up without touching conversion code
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"}), 200
+
+# global error handler to capture unexpected exceptions and log stacktrace
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Log full traceback to container logs for debugging
+    tb = traceback.format_exc()
+    app.logger.error("Unhandled exception: %s\n%s", str(e), tb)
+    # Return minimal info to client
+    return jsonify({"error": "Internal Server Error"}), 500
 
 # ... your other routes (split PDF, pdf-to-word, etc.)
 
