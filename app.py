@@ -16,6 +16,9 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
+# show full trace in HTTP response when SHOW_STACK=1 (set this only for debugging)
+SHOW_STACK = os.environ.get("SHOW_STACK", "0") == "1"
+
 @app.route('/')
 def home():
     return render_template('test.html')  # your frontend
@@ -30,8 +33,22 @@ def health():
 def handle_exception(e):
     # Log full traceback to container logs for debugging
     tb = traceback.format_exc()
-    app.logger.error("Unhandled exception: %s\n%s", str(e), tb)
-    # Return minimal info to client
+    # include some request context to make logs actionable
+    try:
+        ctx_info = {
+            "path": request.path,
+            "method": request.method,
+            "args": dict(request.args),
+            "form_keys": list(request.form.keys()),
+            "files": list(request.files.keys())
+        }
+    except Exception:
+        ctx_info = {"path": "unknown"}
+    app.logger.error("Unhandled exception on request %s: %s\nContext: %s\n%s", request.path if hasattr(request, "path") else "?", str(e), ctx_info, tb)
+
+    # Return minimal info to client unless SHOW_STACK enabled
+    if SHOW_STACK:
+        return jsonify({"error": "Internal Server Error", "details": tb}), 500
     return jsonify({"error": "Internal Server Error"}), 500
 
 # ... your other routes (split PDF, pdf-to-word, etc.)
