@@ -21,7 +21,8 @@ SHOW_STACK = os.environ.get("SHOW_STACK", "0") == "1"
 
 @app.route('/')
 def home():
-    return render_template('test.html')  # your frontend
+    # test.html lives at project root; send it directly to avoid Jinja TemplateNotFound
+    return send_file(os.path.join(app.root_path, "test.html"))
 
 # quick health endpoint to verify container is up without touching conversion code
 @app.route("/health", methods=["GET"])
