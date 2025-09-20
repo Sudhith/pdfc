@@ -1,14 +1,11 @@
-from flask import Flask, request, send_file, after_this_request, jsonify
+from flask import Flask, request, send_file, after_this_request, jsonify, render_template
 from flask_cors import CORS
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 import tempfile, os, zipfile
 from werkzeug.utils import secure_filename
 import pikepdf
 from pdf2docx import Converter
-from docx2pdf import convert as docx_to_pdf
 from PIL import Image
-from flask import Flask, request, send_file, render_template
-from flask_cors import CORS
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
@@ -100,8 +97,17 @@ def word_to_pdf():
     file = request.files["file"]
     input_path = os.path.join(tempfile.gettempdir(), secure_filename(file.filename))
     file.save(input_path)
-    output_path = input_path.replace(".docx", ".pdf")
-    docx_to_pdf(input_path, output_path)
+
+    output_dir = tempfile.gettempdir()
+    base = os.path.splitext(secure_filename(file.filename))[0]
+    output_path = os.path.join(output_dir, base + ".pdf")
+
+    # Use LibreOffice headless conversion (soffice) which works on Linux containers
+    cmd = f'soffice --headless --convert-to pdf --outdir "{output_dir}" "{input_path}"'
+    os.system(cmd)
+
+    if not os.path.exists(output_path):
+        return jsonify({"error": "Conversion failed"}), 500
 
     return safe_send_file(output_path, "converted.pdf")
 
