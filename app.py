@@ -8,6 +8,8 @@ from pdf2docx import Converter
 from PIL import Image
 import logging
 import traceback
+from pdf2image import convert_from_path  # new: convert PDF pages to images
+from io import BytesIO
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
@@ -66,6 +68,14 @@ def safe_send_file(path, download_name):
             pass
         return response
     return send_file(path, as_attachment=True, download_name=download_name)
+
+# small helper: zip list of file paths and return zip path
+def _zip_files(file_paths, zip_name="output.zip"):
+    zip_path = os.path.join(tempfile.gettempdir(), zip_name)
+    with zipfile.ZipFile(zip_path, 'w') as zf:
+        for p in file_paths:
+            zf.write(p, os.path.basename(p))
+    return zip_path
 
 # ---------------- MERGE PDFs ----------------
 @app.route("/merge", methods=["POST"])
@@ -279,6 +289,118 @@ def resize_compress_image():
     os.rmdir(temp_dir)
 
     return safe_send_file(zip_path, "resized_images.zip")
+
+# ---------------- EXTRACT TEXT ----------------
+@app.route("/extract-text", methods=["POST"])
+def extract_text():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    uploaded = request.files["file"]
+    fd, input_path = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    uploaded.save(input_path)
+
+    try:
+        reader = PdfReader(input_path)
+        texts = []
+        for p in reader.pages:
+            try:
+                texts.append(p.extract_text() or "")
+            except Exception:
+                texts.append("")  # continue if a page fails to extract
+        out_txt = "\n\n".join(texts)
+        out_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded.filename) + ".txt")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(out_txt)
+        return safe_send_file(out_path, secure_filename(uploaded.filename).rsplit(".",1)[0] + ".txt")
+    finally:
+        if os.path.exists(input_path):
+            os.remove(input_path)
+
+# ---------------- PDF → IMAGES (zip) ----------------
+@app.route("/pdf-to-images", methods=["POST"])
+def pdf_to_images():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    uploaded = request.files["file"]
+    fd, input_path = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    uploaded.save(input_path)
+
+    dpi = int(request.form.get("dpi", 200))
+    try:
+        pages = convert_from_path(input_path, dpi=dpi)
+    except Exception as e:
+        if os.path.exists(input_path):
+            os.remove(input_path)
+        return jsonify({"error": "Conversion failed", "details": str(e)}), 500
+
+    out_files = []
+    for i, img in enumerate(pages, start=1):
+        out_path = os.path.join(tempfile.gettempdir(), f"{secure_filename(uploaded.filename)}_page_{i}.png")
+        img.save(out_path, "PNG")
+        out_files.append(out_path)
+
+    zip_path = _zip_files(out_files, zip_name=secure_filename(uploaded.filename) + "_images.zip")
+    # cleanup page images
+    for p in out_files:
+        try: os.remove(p)
+        except: pass
+    if os.path.exists(input_path):
+        os.remove(input_path)
+    return safe_send_file(zip_path, secure_filename(uploaded.filename) + "_images.zip")
+
+# ---------------- ROTATE PAGES ----------------
+@app.route("/rotate", methods=["POST"])
+def rotate_pdf():
+    if "file" not in request.files or "angle" not in request.form:
+        return jsonify({"error": "File and angle required"}), 400
+    uploaded = request.files["file"]
+    angle = int(request.form.get("angle", 90))  # expected 90/180/270
+
+    fd, input_path = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    uploaded.save(input_path)
+
+    try:
+        reader = PdfReader(input_path)
+        writer = PdfWriter()
+        for p in reader.pages:
+            try:
+                p.rotate_clockwise(angle)
+            except Exception:
+                # best-effort: if rotate_clockwise not supported, try rotate
+                try:
+                    p.rotate(angle)
+                except Exception:
+                    pass
+            writer.add_page(p)
+        out_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded.filename).rsplit(".",1)[0] + f"_rotated_{angle}.pdf")
+        with open(out_path, "wb") as f:
+            writer.write(f)
+        return safe_send_file(out_path, secure_filename(uploaded.filename).rsplit(".",1)[0] + f"_rotated_{angle}.pdf")
+    finally:
+        if os.path.exists(input_path):
+            os.remove(input_path)
+
+# ---------------- METADATA ----------------
+@app.route("/metadata", methods=["POST"])
+def metadata():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    uploaded = request.files["file"]
+    reader = PdfReader(uploaded)
+    meta = {}
+    try:
+        raw_meta = getattr(reader, "metadata", {}) or {}
+        # normalize values to strings
+        for k, v in raw_meta.items():
+            meta[str(k)] = str(v)
+    except Exception:
+        meta = {}
+    pages = len(reader.pages) if getattr(reader, "pages", None) is not None else 0
+    return jsonify({"filename": secure_filename(uploaded.filename), "pages": pages, "metadata": meta})
+
 import os
 
 if __name__ == "__main__":
