@@ -17,8 +17,11 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Make start script executable and use it as entrypoint so $PORT is handled by the shell shebang.
+RUN chmod +x start.sh
+
 # Expose the port (Railway sets $PORT automatically)
 EXPOSE 5000
 
-# Start with Gunicorn
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT}", "--workers", "3"]
+# Use the start script (shebang will run /bin/bash and expand $PORT). This avoids the JSON-array expansion issue.
+ENTRYPOINT ["./start.sh"]
