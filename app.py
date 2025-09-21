@@ -19,7 +19,9 @@ logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
 # show full trace in HTTP response when SHOW_STACK=1 (set this only for debugging)
-SHOW_STACK = os.environ.get("SHOW_STACK", "0") == "1"
+# DEBUG MODE: default to showing stack so we can get the real traceback while debugging.
+# Change back to "0" before production.
+SHOW_STACK = os.environ.get("SHOW_STACK", "1") == "1"
 
 @app.route('/')
 def home():
